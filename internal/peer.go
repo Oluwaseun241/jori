@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -28,6 +29,40 @@ func sendVideo(dataChannel *webrtc.DataChannel, videoFile string) error {
 	return nil
 }
 
-func main() {
+func receiveVideo(dataChannel *webrtc.DataChannel) {
+	file, err := os.Create("output.mp4")
+	if err != nil {
+		fmt.Println("Error creating file:", err)
+		return
+	}
+	defer file.Close()
 
+	dataChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
+		file.Write(msg.Data)
+	})
+}
+
+func main() {
+	config := webrtc.Configuration{}
+	peerConnection, err := webrtc.NewPeerConnection(config)
+	if err != nil {
+		panic(err)
+	}
+
+	dataChannel, err := peerConnection.CreateDataChannel("video-stream", nil)
+	if err != nil {
+		panic(err)
+	}
+
+	dataChannel.OnOpen(func() {
+		fmt.Println("Data channel opened")
+		// stream video
+		sendVideo(dataChannel, "sample.mp4")
+	})
+
+	dataChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
+		fmt.Println("Recieved video chunk of size:", len(msg.Data))
+	})
+
+	select {}
 }
