@@ -33,14 +33,15 @@ func NewSignalingServer() *SignalingServer {
 }
 
 func (s *SignalingServer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	peerID := r.URL.Query().Get("peer_id")
+	if peerID == "" {
+		http.Error(w, "Missing peer_id parameter", http.StatusBadRequest)
+		return
+	}
+
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("Error upgrading connection: %v", err)
-		return
-	}
-	peerID := r.URL.Query().Get("peer_id")
-	if peerID == "" {
-		conn.Close()
 		return
 	}
 

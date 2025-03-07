@@ -1,3 +1,3 @@
 # Jori 🍐
 
-`Jori` is a Peer-to-Peer (P2P) Content Distribution System
+`Jori` is a low-latency P2P video streaming system
