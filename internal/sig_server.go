@@ -1,40 +1,80 @@
 package internal
 
 import (
-	"fmt"
+	"encoding/json"
+	"log"
 	"net/http"
+	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
+type SignalingServer struct {
+	upgrader    websocket.Upgrader
+	connections map[string]*websocket.Conn
+	mu          sync.RWMutex
 }
 
-var connections []*websocket.Conn
+type SignalMessage struct {
+	Type    string          `json:"type"`
+	PeerID  string          `json:"peer_id"`
+	Payload json.RawMessage `json:"payload"`
+}
 
-func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+func NewSignalingServer() *SignalingServer {
+	return &SignalingServer{
+		upgrader: websocket.Upgrader{
+			CheckOrigin: func(r *http.Request) bool {
+				return true
+			},
+		},
+		connections: make(map[string]*websocket.Conn),
+	}
+}
+
+func (s *SignalingServer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		fmt.Println("Error upgrading: ", err)
+		log.Printf("Error upgrading connection: %v", err)
 		return
 	}
-	defer conn.Close()
-	connections = append(connections, conn)
+	peerID := r.URL.Query().Get("peer_id")
+	if peerID == "" {
+		conn.Close()
+		return
+	}
+
+	s.mu.Lock()
+	s.connections[peerID] = conn
+	s.mu.Unlock()
+
+	defer func() {
+		s.mu.Lock()
+		delete(s.connections, peerID)
+		s.mu.Unlock()
+		conn.Close()
+	}()
 
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
-			fmt.Println("Read error:", err)
+			log.Printf("Error reading message: %v", err)
 			return
 		}
 
-		// Broadcast message to all peer
-		for _, c := range connections {
-			if c != conn {
-				c.WriteMessage(websocket.TextMessage, msg)
+		var signal SignalMessage
+		if err := json.Unmarshal(msg, &signal); err != nil {
+			log.Printf("Error unmarshaling message: %v", err)
+			continue
+		}
+
+		s.mu.RLock()
+		targetConn, exists := s.connections[signal.PeerID]
+		s.mu.RUnlock()
+
+		if exists {
+			if err := targetConn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				log.Printf("Error forwarding message: %v", err)
 			}
 		}
 	}
