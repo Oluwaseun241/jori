@@ -51,7 +51,7 @@ func TestVideoChunkSerialization(t *testing.T) {
 func TestPeerVideoTransfer(t *testing.T) {
 	inputFile := "test_input.mp4"
 	outputFile := "test_output.mp4"
-	
+
 	testData := []byte("test video content")
 	err := os.WriteFile(inputFile, testData, 0644)
 	assert.NoError(t, err)
@@ -111,7 +111,7 @@ func TestPeerVideoTransfer(t *testing.T) {
 				t.Errorf("Failed to deserialize chunk: %v", err)
 				return
 			}
-			
+
 			receivedMu.Lock()
 			receivedData = append(receivedData, chunk.Data...)
 			receivedMu.Unlock()
